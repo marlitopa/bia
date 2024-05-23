@@ -3,8 +3,9 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo Fazendo login no ECR...      
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 590183906734.dkr.ecr.us-east-1.amazonaws.com
+      - echo Fazendo login no ECR...
+      - aws ecr get-login-password --region us-east-1 | docker login --username
+        AWS --password-stdin 590183906734.dkr.ecr.us-east-1.amazonaws.com
       - REPOSITORY_URI=590183906734.dkr.ecr.us-east-1.amazonaws.com/bia
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
@@ -21,6 +22,38 @@ phases:
       - docker push $REPOSITORY_URI:latest
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - echo Gerando artefato da imagem para o ECS
-      - printf '[{"name":"bia","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - printf '[{"name":"bia","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG >
+        imagedefinitions.json
 artifacts:
   files: imagedefinitions.json
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Function
+      CodeUri: src/Function
+      Handler: index.handler
+      Runtime: nodejs20.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Function}
+Transform: AWS::Serverless-2016-10-31
